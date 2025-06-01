@@ -19,18 +19,16 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _confirmPasswordController =
       TextEditingController();
   bool _isLoading = false;
+  bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
 
   final RegisterPresenter _registerPresenter =
       RegisterPresenter(api: ApiService());
   final ApiService _apiService = ApiService();
 
-  // Regular expression untuk validasi email
-  // Ini adalah regex dasar untuk memeriksa keberadaan '@' dan format umum.
-  // Untuk validasi email yang lebih ketat, regex bisa jauh lebih kompleks.
   final RegExp _emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
 
   Future<void> _handleRegister() async {
-    // Validasi input di frontend
     if (_nameController.text.isEmpty ||
         _emailController.text.isEmpty ||
         _passwordController.text.isEmpty ||
@@ -42,7 +40,6 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     if (!_emailRegex.hasMatch(_emailController.text)) {
-      // <<< Validasi Email di sini
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text(
@@ -113,70 +110,209 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Registrasi Akun")),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: "Username",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: "Email",
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType
-                    .emailAddress, // Penting: Menampilkan keyboard email
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(
-                  labelText: "Kata Sandi",
-                  border: OutlineInputBorder(),
-                ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _confirmPasswordController,
-                decoration: const InputDecoration(
-                  labelText: "Konfirmasi Kata Sandi",
-                  border: OutlineInputBorder(),
-                ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 24),
-              _isLoading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: _handleRegister,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 40, vertical: 15),
-                        textStyle: const TextStyle(fontSize: 18),
-                      ),
-                      child: const Text("Daftar"),
-                    ),
-              const SizedBox(height: 20),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // Kembali ke halaman login
-                },
-                child: const Text("Sudah punya akun? Login di sini"),
-              ),
-            ],
+      body: Stack(
+        children: [
+          // Gambar Background Fullscreen
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/loginbg.jpg',
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
+          // Overlay Hitam Transparan
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.5),
+            ),
+          ),
+          // Konten Utama Register (dikeluarkan link ke login)
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 32.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Logo/Text "MAYSSORIES"
+                  const Text(
+                    "MAYSSORIES",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 30,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 3,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "CREATE NEW ACCOUNT",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 50),
+
+                  // Input Username/Name
+                  TextField(
+                    controller: _nameController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: "Username",
+                      hintStyle: TextStyle(color: Colors.white54),
+                      fillColor: Colors.white.withOpacity(0.4),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(5.0),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 16.0, horizontal: 20.0),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Input Email
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: "Email",
+                      hintStyle: TextStyle(color: Colors.white54),
+                      fillColor: Colors.white.withOpacity(0.4),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(5.0),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 16.0, horizontal: 20.0),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Input Password (dengan toggle visibility)
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: !_isPasswordVisible,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: "Password",
+                      hintStyle: TextStyle(color: Colors.white54),
+                      fillColor: Colors.white.withOpacity(0.4),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(5.0),
+                        borderSide: BorderSide.none,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _isPasswordVisible
+                              ? Icons.visibility
+                              : Icons.visibility_off,
+                          color: Colors.white54,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _isPasswordVisible = !_isPasswordVisible;
+                          });
+                        },
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 16.0, horizontal: 20.0),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Input Confirm Password (dengan toggle visibility)
+                  TextField(
+                    controller: _confirmPasswordController,
+                    obscureText: !_isConfirmPasswordVisible,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: "Confirm Password",
+                      hintStyle: TextStyle(color: Colors.white54),
+                      fillColor: Colors.white.withOpacity(0.4),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(5.0),
+                        borderSide: BorderSide.none,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _isConfirmPasswordVisible
+                              ? Icons.visibility
+                              : Icons.visibility_off,
+                          color: Colors.white54,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _isConfirmPasswordVisible =
+                                !_isConfirmPasswordVisible;
+                          });
+                        },
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 16.0, horizontal: 20.0),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Tombol Daftar
+                  _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(color: Colors.white))
+                      : ElevatedButton(
+                          onPressed: _handleRegister,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 15.0),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(5.0),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            "SIGN UP",
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                  // Hapus SizedBox dan TextButton dari sini
+                  // const SizedBox(height: 20),
+                  // TextButton(...)
+                ],
+              ),
+            ),
+          ),
+          // --- Link Kembali ke Login di bagian bawah layar ---
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: MediaQuery.of(context).padding.bottom +
+                20, // Padding dari bawah layar (termasuk safe area)
+            child: TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Kembali ke halaman login
+              },
+              child: const Text(
+                "Already have an account? Login here",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+          // --- Akhir Link Kembali ke Login ---
+        ],
       ),
     );
   }

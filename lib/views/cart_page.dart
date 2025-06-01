@@ -8,7 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:sensors_plus/sensors_plus.dart'; // <<< Import ini
 import 'dart:async'; // Untuk StreamSubscription dan Timer
 import 'dart:io'; // Untuk Platform.isAndroid/iOS
-import 'package:flutter/foundation.dart' show kIsWeb; 
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class CartPage extends StatefulWidget {
   final VoidCallback? onCartViewed;
@@ -38,7 +38,9 @@ class _CartPageState extends State<CartPage>
   double _shakeThreshold = 15.0; // Amplitudo goyangan yang dianggap 'shake'
   int _shakeCount = 0;
   DateTime? _lastShakeTime;
-  Duration _shakeInterval = const Duration(milliseconds:500); // Waktu antara goyangan untuk dianggap "2 kali goyang"
+  Duration _shakeInterval = const Duration(
+      milliseconds:
+          500); // Waktu antara goyangan untuk dianggap "2 kali goyang"
   // --- Akhir Variabel Deteksi Goyangan ---
 
   @override
