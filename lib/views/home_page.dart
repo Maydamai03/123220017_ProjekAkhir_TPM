@@ -3,9 +3,15 @@ import 'package:projek_akhir_tpm/views/cart_page.dart';
 import 'package:projek_akhir_tpm/views/feedback_page.dart';
 import 'package:projek_akhir_tpm/views/product_detail_page.dart';
 import 'package:projek_akhir_tpm/views/profile_page.dart';
-import '../models/product_model.dart';
-import '../network/api_service.dart';
-import '../presenters/product_presenter.dart';
+import 'package:projek_akhir_tpm/views/history_pembayaran_page.dart';
+import 'package:projek_akhir_tpm/models/product_model.dart';
+import 'package:projek_akhir_tpm/network/api_service.dart';
+import 'package:projek_akhir_tpm/presenters/product_presenter.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:projek_akhir_tpm/models/cart_item_model.dart';
+import 'package:projek_akhir_tpm/models/wishlist_item_model.dart';
+import 'package:projek_akhir_tpm/utils/session_manager.dart';
+import 'package:intl/intl.dart'; // <<< Import ini
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,15 +27,20 @@ class _HomePageState extends State<HomePage> {
   bool _loading = true;
   int _selectedIndex = 0;
   final TextEditingController _searchCtrl = TextEditingController();
-  int _newCartItemCount = 0; // hitung produk baru yang belum dilihat
+  int _newCartItemCount = 0;
+
+  late Box<CartItem> _cartBox;
+  late Box<WishlistItem> _wishlistBox;
+  int? _currentUserId;
+
+  // Deklarasikan formatter di sini sebagai final
+  final NumberFormat _currencyFormatter =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
   @override
   void initState() {
     super.initState();
-    _loadProducts();
-    _newCartItemCount = 0; // Awal dianggap user belum lihat produk baru
-    
-
+    _loadInitialData();
     _searchCtrl.addListener(() {
       final query = _searchCtrl.text.toLowerCase();
       setState(() {
@@ -40,6 +51,13 @@ class _HomePageState extends State<HomePage> {
             .toList();
       });
     });
+  }
+
+  Future<void> _loadInitialData() async {
+    _cartBox = await Hive.openBox<CartItem>('cartBox');
+    _wishlistBox = await Hive.openBox<WishlistItem>('wishlistBox');
+    _currentUserId = await SessionManager.getLoggedInUserId();
+    _loadProducts();
   }
 
   Future<void> _loadProducts() async {
@@ -58,26 +76,102 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Saat user klik bottom navbar:
+  void _resetCartNotification() {
+    setState(() {
+      _newCartItemCount = 0;
+    });
+  }
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
-
-      if (index == 3) {
-        // tab keranjang
-        _newCartItemCount = 0; // reset notif karena user sudah lihat keranjang
+      if (index == 1) {
+        // Keranjang
+        _resetCartNotification();
       }
     });
   }
 
-// Fungsi untuk dipanggil saat ada penambahan produk baru ke keranjang
   void addNewCartItem() {
     setState(() {
       _newCartItemCount++;
     });
   }
 
+  String _shortenName(String name, [int maxLength = 20]) {
+    if (name.length <= maxLength) return name;
+    return '${name.substring(0, maxLength)}...';
+  }
+
+  Future<void> _addToCartFromHome(ProductModel product) async {
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("Anda harus login untuk menambahkan ke keranjang!")),
+      );
+      return;
+    }
+
+    final existingItemIndex = _cartBox.values.toList().indexWhere(
+          (item) =>
+              item.userId == _currentUserId && item.product.id == product.id,
+        );
+
+    if (existingItemIndex != -1) {
+      final existingItem = _cartBox.values.toList()[existingItemIndex];
+      existingItem.quantity++;
+      await existingItem.save();
+    } else {
+      final newCartItem = CartItem(
+        userId: _currentUserId!,
+        product: product,
+        quantity: 1,
+      );
+      await _cartBox.add(newCartItem);
+    }
+    addNewCartItem();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("${product.name} ditambahkan ke keranjang")),
+    );
+  }
+
+  Future<void> _toggleWishlistFromHome(ProductModel product) async {
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("Anda harus login untuk menambahkan ke wishlist!")),
+      );
+      return;
+    }
+
+    final existingWishlistItemIndex = _wishlistBox.values.toList().indexWhere(
+          (item) =>
+              item.userId == _currentUserId && item.product.id == product.id,
+        );
+
+    if (existingWishlistItemIndex != -1) {
+      await _wishlistBox.values.toList()[existingWishlistItemIndex].delete();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${product.name} dihapus dari wishlist")),
+      );
+    } else {
+      final newWishlistItem = WishlistItem(
+        userId: _currentUserId!,
+        product: product,
+      );
+      await _wishlistBox.add(newWishlistItem);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${product.name} ditambahkan ke wishlist")),
+      );
+    }
+    setState(() {});
+  }
+
   Widget _buildProductCard(ProductModel product) {
+    bool isInWishlist = _wishlistBox.values.any(
+      (item) => item.userId == _currentUserId && item.product.id == product.id,
+    );
+
     return GestureDetector(
       onTap: () async {
         await Navigator.push(
@@ -85,23 +179,24 @@ class _HomePageState extends State<HomePage> {
           MaterialPageRoute(
             builder: (context) => ProductDetailPage(
               product: product,
-              onAddToCart: addNewCartItem, // kirim callback
+              onAddToCart: addNewCartItem,
             ),
           ),
         );
-
-        setState(() {}); // force rebuild biar cart badge update
       },
       child: Card(
+        color: const Color.fromARGB(255, 245, 245, 245),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 3,
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        child: SizedBox(
-          width: 200, // supaya bisa scroll horizontal 2 item per row
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Image network, sesuaikan url image
-              AspectRatio(
+        margin: const EdgeInsets.all(4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Gambar produk (tanpa tombol di atasnya)
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
+              child: AspectRatio(
                 aspectRatio: 1,
                 child: Image.network(
                   product.image,
@@ -117,24 +212,70 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(product.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    // Text(product.description,
-                    //     maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Text("Rp ${product.price.toString()}",
-                        style: const TextStyle(color: Colors.green)),
-                  ],
-                ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment
+                        .spaceBetween, // Untuk menempatkan tombol di kanan
+                    children: [
+                      Expanded(
+                        // Agar nama produk tidak overflow
+                        child: Text(
+                          _shortenName(product.name),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow
+                              .ellipsis, // Jika nama terlalu panjang
+                          maxLines: 1,
+                        ),
+                      ),
+                      // Tombol Wishlist di samping nama produk
+                      IconButton(
+                        icon: Icon(
+                          isInWishlist ? Icons.favorite : Icons.favorite_border,
+                          color: isInWishlist ? Colors.red : Colors.grey,
+                        ),
+                        onPressed: () => _toggleWishlistFromHome(product),
+                        padding: EdgeInsets.zero,
+                        constraints: BoxConstraints(),
+                        tooltip: 'Tambah ke Wishlist',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _currencyFormatter
+                            .format(product.price), // Format harga di sini
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                      // Tombol Add Keranjang di samping harga
+                      IconButton(
+                        icon: const Icon(Icons.add_shopping_cart,
+                            color: Color.fromARGB(255, 49, 49, 49), size: 20),
+                        onPressed: () => _addToCartFromHome(product),
+                        padding: EdgeInsets.zero,
+                        constraints: BoxConstraints(),
+                        tooltip: 'Tambah ke Keranjang',
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -162,7 +303,7 @@ class _HomePageState extends State<HomePage> {
           child: GridView.builder(
             padding: const EdgeInsets.all(8),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2, // 2 item per baris
+              crossAxisCount: 2,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
               childAspectRatio: 0.75,
@@ -178,27 +319,24 @@ class _HomePageState extends State<HomePage> {
 
   List<Widget> _pages() => [
         _buildHomeContent(),
+        CartPage(onCartViewed: _resetCartNotification),
+        const HistoryPembayaranPage(),
         const ProfilePage(),
         const FeedbackPage(),
-        const CartPage(),
       ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Toko Aksesoris")),
       body: _pages()[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         selectedItemColor: Colors.black,
         unselectedItemColor: Colors.black54,
+        type: BottomNavigationBarType.fixed,
         items: [
           const BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-          const BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: "Profil"),
-          const BottomNavigationBarItem(
-              icon: Icon(Icons.feedback), label: "Saran & Kesan"),
           BottomNavigationBarItem(
             icon: Stack(
               children: [
@@ -226,6 +364,12 @@ class _HomePageState extends State<HomePage> {
             ),
             label: "Keranjang",
           ),
+          const BottomNavigationBarItem(
+              icon: Icon(Icons.history), label: "Riwayat"),
+          const BottomNavigationBarItem(
+              icon: Icon(Icons.person), label: "Profil"),
+          const BottomNavigationBarItem(
+              icon: Icon(Icons.feedback), label: "Saran & Kesan"),
         ],
       ),
     );
