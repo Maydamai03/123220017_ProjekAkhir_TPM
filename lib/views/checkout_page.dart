@@ -9,7 +9,7 @@ import 'package:projek_akhir_tpm/network/api_service.dart';
 import 'package:projek_akhir_tpm/utils/session_manager.dart';
 import 'package:projek_akhir_tpm/views/history_pembayaran_page.dart';
 import 'package:projek_akhir_tpm/presenters/order_presenter.dart';
-import 'package:intl/intl.dart'; // <<< Import ini
+import 'package:intl/intl.dart';
 
 class CheckoutPage extends StatefulWidget {
   final List<CartItem> cartItems;
@@ -29,17 +29,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
   bool _isLoading = false;
   late OrderPresenter _orderPresenter;
 
+  // Sesuaikan nilai kurs manual Anda jika diperlukan
   final Map<String, double> _exchangeRates = {
     'IDR': 1.0,
-    'SGD': 0.000085, // Sesuaikan nilai kurs manual Anda
+    'SGD': 0.000085,
     'MYR': 0.00031,
     'PHP': 0.0036,
   };
 
-  // Deklarasikan formatter untuk IDR
   final NumberFormat _idrFormatter =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-  // Deklarasikan formatter generik untuk mata uang lain (dengan 2 desimal)
   final NumberFormat _genericCurrencyFormatter =
       NumberFormat.currency(locale: 'en_US', symbol: '', decimalDigits: 2);
 
@@ -82,18 +81,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Izin lokasi ditolak.')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Izin lokasi ditolak.')),
+            );
+          }
           return;
         }
       }
       if (permission == LocationPermission.deniedForever) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'Izin lokasi ditolak permanen. Silakan ubah di pengaturan aplikasi.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text(
+                    'Izin lokasi ditolak permanen. Silakan ubah di pengaturan aplikasi.')),
+          );
+        }
         return;
       }
 
@@ -109,18 +112,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks.first;
         _addressController.text =
-            "${place.street}, ${place.subLocality}, ${place.locality}, ${place.administrativeArea}, ${place.postalCode}, ${place.country}";
+            "${place.street ?? ''}, ${place.subLocality ?? ''}, ${place.locality ?? ''}, ${place.administrativeArea ?? ''}, ${place.postalCode ?? ''}, ${place.country ?? ''}";
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content:
-                  Text('Tidak dapat menemukan alamat dari lokasi saat ini.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content:
+                    Text('Tidak dapat menemukan alamat dari lokasi saat ini.')),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Gagal mendapatkan lokasi: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gagal mendapatkan lokasi: $e")),
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -173,23 +180,28 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       final cartBox = await Hive.openBox<CartItem>('cartBox');
       for (var item in widget.cartItems) {
-        await item.delete();
+        await item.delete(); // Menghapus item dari Hive box
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Pesanan berhasil dibuat!")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Pesanan berhasil dibuat!")),
+        );
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HistoryPembayaranPage()),
-      );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+              builder: (context) => const HistoryPembayaranPage()),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                "Gagal membuat pesanan: ${e.toString().replaceFirst('Exception: ', '')}")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  "Gagal membuat pesanan: ${e.toString().replaceFirst('Exception: ', '')}")),
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -210,101 +222,264 @@ class _CheckoutPageState extends State<CheckoutPage> {
         .fold(0.0, (sum, item) => sum + (item.product.price * item.quantity));
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Checkout")),
+      backgroundColor: Colors.grey[100], // Background yang terang
+      appBar: AppBar(
+        title: const Text(
+          "Checkout",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: Colors.grey[900], // AppBar gelap
+        iconTheme:
+            const IconThemeData(color: Colors.white), // Tombol kembali putih
+        elevation: 0, // Hapus bayangan AppBar
+      ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[700]!),
+              ),
+            )
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Detail Penerima:",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _recipientNameController,
-                    decoration: const InputDecoration(
-                      labelText: "Nama Penerima",
-                      border: OutlineInputBorder(),
+                  // --- Detail Penerima ---
+                  Card(
+                    elevation: 5,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _addressController,
-                          decoration: const InputDecoration(
-                            labelText: "Alamat Pengiriman",
-                            border: OutlineInputBorder(),
+                    color: Colors.white,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Detail Pengiriman",
+                            style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800]),
                           ),
-                          maxLines: 3,
-                        ),
+                          const SizedBox(height: 15),
+                          TextField(
+                            controller: _recipientNameController,
+                            style: TextStyle(color: Colors.grey[900]),
+                            decoration: InputDecoration(
+                              labelText: "Nama Penerima",
+                              labelStyle: TextStyle(color: Colors.grey[600]),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[300]!),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[400]!),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[700]!, width: 2),
+                              ),
+                              prefixIcon: Icon(Icons.person_outline,
+                                  color: Colors.grey[500]),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _addressController,
+                                  style: TextStyle(color: Colors.grey[900]),
+                                  decoration: InputDecoration(
+                                    labelText: "Alamat untuk Pengiriman",
+                                    labelStyle:
+                                        TextStyle(color: Colors.grey[600]),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey[300]!),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey[400]!),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey[700]!, width: 2),
+                                    ),
+                                    prefixIcon: Icon(Icons.location_on_outlined,
+                                        color: Colors.grey[500]),
+                                  ),
+                                  maxLines: 3,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                height:
+                                    56, // Menyesuaikan tinggi dengan TextField
+                                child: ElevatedButton(
+                                  onPressed: _getCurrentLocationAndFillAddress,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        Colors.grey[200], // Tombol abu-abu muda
+                                    foregroundColor:
+                                        Colors.grey[700], // Ikon abu-abu
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    elevation: 2,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12),
+                                  ),
+                                  child:
+                                      const Icon(Icons.my_location, size: 24),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.location_on),
-                        onPressed: _getCurrentLocationAndFillAddress,
-                        tooltip: "Gunakan Lokasi Saat Ini",
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    "Total Belanja:",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  // --- UBAH BARIS INI ---
-                  Text(
-                    _idrFormatter.format(totalIDR) + " (Total Keranjang Awal)",
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  // --- Akhir Perubahan ---
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: _selectedCurrency,
-                    decoration: const InputDecoration(
-                      labelText: "Konversi ke Mata Uang",
-                      border: OutlineInputBorder(),
                     ),
-                    items: <String>['IDR', 'SGD', 'MYR', 'PHP']
-                        .map((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
-                    onChanged: (String? newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _selectedCurrency = newValue;
-                        });
-                        _calculateAndConvertTotal();
-                      }
-                    },
                   ),
-                  const SizedBox(height: 10),
-                  // --- UBAH BARIS INI ---
-                  Text(
-                    "Total Pembayaran: ${_selectedCurrency == 'IDR' ? _idrFormatter.format(_convertedTotalAmount) : _selectedCurrency + ' ' + _genericCurrencyFormatter.format(_convertedTotalAmount)}",
-                    style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue),
+                  const SizedBox(height: 25),
+
+                  // --- Ringkasan Pesanan ---
+                  Card(
+                    elevation: 5,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    color: Colors.white,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Ringkasan Pesanana",
+                            style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800]),
+                          ),
+                          const SizedBox(height: 15),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                "Total Harga Keranjang:",
+                                style: TextStyle(
+                                    fontSize: 16, color: Colors.grey[700]),
+                              ),
+                              Text(
+                                _idrFormatter.format(totalIDR),
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[900]),
+                              ),
+                            ],
+                          ),
+                          const Divider(
+                              height: 30, thickness: 1, color: Colors.grey),
+                          DropdownButtonFormField<String>(
+                            value: _selectedCurrency,
+                            decoration: InputDecoration(
+                              labelText: "Konversi Mata Uang",
+                              labelStyle: TextStyle(color: Colors.grey[600]),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[300]!),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[400]!),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[700]!, width: 2),
+                              ),
+                            ),
+                            dropdownColor: Colors.white,
+                            style: TextStyle(color: Colors.grey[900]),
+                            items: _exchangeRates.keys.map((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              if (newValue != null) {
+                                setState(() {
+                                  _selectedCurrency = newValue;
+                                });
+                                _calculateAndConvertTotal();
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                "Total Pembayaran:",
+                                style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey[900]),
+                              ),
+                              Text(
+                                _selectedCurrency == 'IDR'
+                                    ? _idrFormatter
+                                        .format(_convertedTotalAmount)
+                                    : '${_selectedCurrency} ${_genericCurrencyFormatter.format(_convertedTotalAmount)}',
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color.fromARGB(255, 59, 139, 83),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  // --- Akhir Perubahan ---
                   const SizedBox(height: 30),
+
+                  // --- Tombol Buat Pesanan ---
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: _placeOrder,
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: const Text("Buat Pesanan"),
+                      icon: const Icon(Icons.shopping_cart_checkout,
+                          color: Colors.white),
+                      label: const Text(
+                        "Buat Pesanan",
+                        style: TextStyle(fontSize: 18, color: Colors.white),
+                      ),
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        textStyle: const TextStyle(fontSize: 18),
+                        backgroundColor: const Color(0xFF8A2BE2), // Warna ungu
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        elevation: 7, // Tambahkan sedikit bayangan
                       ),
                     ),
                   ),

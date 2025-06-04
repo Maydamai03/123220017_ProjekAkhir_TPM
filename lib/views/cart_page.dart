@@ -5,9 +5,9 @@ import 'package:projek_akhir_tpm/models/wishlist_item_model.dart';
 import 'package:projek_akhir_tpm/utils/session_manager.dart';
 import 'package:projek_akhir_tpm/views/checkout_page.dart';
 import 'package:intl/intl.dart';
-import 'package:sensors_plus/sensors_plus.dart'; // <<< Import ini
-import 'dart:async'; // Untuk StreamSubscription dan Timer
-import 'dart:io'; // Untuk Platform.isAndroid/iOS
+import 'package:sensors_plus/sensors_plus.dart';
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class CartPage extends StatefulWidget {
@@ -33,14 +33,15 @@ class _CartPageState extends State<CartPage>
   final NumberFormat _currencyFormatter =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-  // --- Variabel untuk deteksi goyangan --- listener untuk akselerometer, mendeteksi goyangan, dan menampilkan dialog.
+  // --- Variabel untuk deteksi goyangan ---
   StreamSubscription? _accelerometerSubscription;
-  double _shakeThreshold = 15.0; // Amplitudo goyangan yang dianggap 'shake'
+  double _shakeThreshold = 25.0; // Peningkatan dari 15.0 menjadi 25.0 (contoh)
   int _shakeCount = 0;
   DateTime? _lastShakeTime;
-  Duration _shakeInterval = const Duration(
-      milliseconds:
-          500); // Waktu antara goyangan untuk dianggap "2 kali goyang"
+  Duration _shakeInterval = const Duration(milliseconds: 1000); // Peningkatan dari 500ms menjadi 1000ms (contoh)
+
+  // --- Variabel baru untuk mencegah spam pop-up ---
+  bool _isDialogShowing = false;
   // --- Akhir Variabel Deteksi Goyangan ---
 
   @override
@@ -51,7 +52,7 @@ class _CartPageState extends State<CartPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onCartViewed?.call();
     });
-    _startShakeDetection(); // <<< Mulai deteksi goyangan
+    _startShakeDetection(); // Mulai deteksi goyangan saat CartPage dibuat
   }
 
   @override
@@ -59,7 +60,7 @@ class _CartPageState extends State<CartPage>
     _tabController.dispose();
     _cartBox.listenable().removeListener(_filterItems);
     _wishlistBox.listenable().removeListener(_filterItems);
-    _accelerometerSubscription?.cancel(); // <<< Batalkan langganan sensor
+    _accelerometerSubscription?.cancel(); // Pastikan langganan sensor dibatalkan
     super.dispose();
   }
 
@@ -100,47 +101,66 @@ class _CartPageState extends State<CartPage>
     });
   }
 
-  // --- Fungsi Deteksi Goyangan ---
+  // --- Fungsi untuk mengaktifkan/menonaktifkan deteksi goyangan ---
+  void _setShakeDetectionEnabled(bool enable) {
+    if (enable) {
+      // Hanya mulai jika belum aktif atau sedang di-pause
+      if (_accelerometerSubscription == null || _accelerometerSubscription!.isPaused) {
+        _startShakeDetection();
+      }
+    } else {
+      // Pause stream jika aktif
+      _accelerometerSubscription?.pause();
+    }
+  }
+  // --- Akhir fungsi kontrol deteksi goyangan ---
+
+  // --- Fungsi Deteksi Goyangan (MODIFIKASI DI SINI) ---
   void _startShakeDetection() {
+    // Pastikan subscription sebelumnya dibatalkan jika ada
+    _accelerometerSubscription?.cancel();
+
     // Memastikan hanya berjalan di platform yang mendukung sensor (mobile)
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      // Gunakan kIsWeb dari foundation.dart jika ada
       _accelerometerSubscription =
           accelerometerEventStream(samplingPeriod: SensorInterval.gameInterval)
               .listen((AccelerometerEvent event) {
+        // --- Cek apakah dialog sedang tampil ---
+        if (_isDialogShowing) {
+          return; // Abaikan event goyangan jika dialog sudah tampil
+        }
+
         // Hitung kekuatan goyangan
-        double acceleration = (event.x * event.x +
-            event.y * event.y +
-            event.z * event.z); // Kuadrat dari magnitudo
+        double acceleration = (event.x * event.x + event.y * event.y + event.z * event.z);
 
         if (acceleration > _shakeThreshold * _shakeThreshold) {
-          // Bandingkan dengan kuadrat threshold
           DateTime now = DateTime.now();
-          if (_lastShakeTime == null ||
-              now.difference(_lastShakeTime!) > _shakeInterval) {
-            _shakeCount = 1; // Goyangan pertama dalam interval baru
+          if (_lastShakeTime == null || now.difference(_lastShakeTime!) > _shakeInterval) {
+            _shakeCount = 1;
           } else {
-            _shakeCount++; // Goyangan berturut-turut dalam interval
+            _shakeCount++;
           }
           _lastShakeTime = now;
 
           if (_shakeCount == 2) {
-            // Deteksi 2 kali goyangan
-            _shakeCount = 0; // Reset
-            _lastShakeTime = null; // Reset waktu
-            _showClearCartConfirmationDialog(); // Tampilkan dialog konfirmasi
+            _shakeCount = 0;
+            _lastShakeTime = null;
+            _showClearCartConfirmationDialog();
           }
         }
       });
     } else {
-      // Untuk web atau platform lain, bisa tambahkan pesan debug atau abaikan
       print("Sensor akselerometer tidak tersedia di platform ini.");
     }
   }
+  // --- Akhir Fungsi Deteksi Goyangan ---
 
+  // --- Fungsi showClearCartConfirmationDialog (MODIFIKASI DI SINI) ---
   Future<void> _showClearCartConfirmationDialog() async {
-    if (_userCartItems.isEmpty)
-      return; // Jangan tampilkan dialog jika keranjang sudah kosong
+    if (_userCartItems.isEmpty) return;
+
+    // Set flag bahwa dialog sedang tampil
+    _isDialogShowing = true;
 
     bool? confirm = await showDialog<bool>(
       context: context,
@@ -152,13 +172,13 @@ class _CartPageState extends State<CartPage>
           actions: <Widget>[
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(false); // Tidak jadi hapus
+                Navigator.of(context).pop(false);
               },
               child: const Text('Tidak'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(true); // Ya, hapus
+                Navigator.of(context).pop(true);
               },
               child: const Text('Ya, Hapus Semua'),
             ),
@@ -167,24 +187,26 @@ class _CartPageState extends State<CartPage>
       },
     );
 
+    // Reset flag setelah dialog ditutup
+    _isDialogShowing = false;
+
     if (confirm == true) {
       _clearAllCartItems();
     }
   }
+  // --- Akhir Fungsi showClearCartConfirmationDialog ---
 
   void _clearAllCartItems() async {
     if (_userCartItems.isEmpty) return;
 
-    // Buat salinan untuk iterasi aman, karena item akan dihapus dari _cartBox
     for (var item in List<CartItem>.from(_userCartItems)) {
-      await item.delete(); // Hapus setiap item dari Hive
+      await item.delete();
     }
-    widget.onCartViewed?.call(); // Perbarui badge notifikasi di HomePage
+    widget.onCartViewed?.call();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Semua item di keranjang telah dihapus.")),
     );
   }
-  // --- Akhir Fungsi Deteksi Goyangan ---
 
   void _incrementQuantity(CartItem item) async {
     item.quantity++;
@@ -251,7 +273,11 @@ class _CartPageState extends State<CartPage>
         0.0, (sum, item) => sum + (item.product.price * item.quantity));
 
     return Scaffold(
+     backgroundColor: const Color.fromARGB(255, 255, 255, 255), // Ini adalah baris kuncinya
+
       appBar: AppBar(
+      backgroundColor: const Color.fromARGB(255, 255, 255, 255), // Ini adalah baris kuncinya
+
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -260,15 +286,14 @@ class _CartPageState extends State<CartPage>
               height: 50,
             ),
             const SizedBox(width: 8),
-            // const Text(
-            //   "Belanja Saya",
-            //   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            // ),
           ],
         ),
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
+          labelColor: const Color.fromARGB(255, 24, 24, 24),
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: Color.fromARGB(255, 24, 24, 24),
           tabs: const [
             Tab(text: "Keranjang", icon: Icon(Icons.shopping_cart)),
             Tab(text: "Wishlist", icon: Icon(Icons.favorite)),
@@ -289,7 +314,7 @@ class _CartPageState extends State<CartPage>
                         itemBuilder: (context, index) {
                           final item = _userCartItems[index];
                           return Card(
-                            color: Colors.lightBlue[50],
+                            color: const Color.fromARGB(255, 255, 255, 255),
                             margin: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                             child: Padding(
@@ -377,7 +402,7 @@ class _CartPageState extends State<CartPage>
                             style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.blue),
+                                color: Color.fromARGB(255, 59, 139, 83)),
                           ),
                         ],
                       ),
@@ -396,19 +421,31 @@ class _CartPageState extends State<CartPage>
                               );
                               return;
                             }
-                            Navigator.push(
+                            // --- Penting: NONAKTIFKAN deteksi goyangan sebelum navigasi ---
+                            _setShakeDetectionEnabled(false);
+
+                            Navigator.push( // Tetap gunakan push agar bisa kembali
                               context,
                               MaterialPageRoute(
                                 builder: (context) =>
                                     CheckoutPage(cartItems: _userCartItems),
                               ),
                             ).then((value) {
-                              _filterItems();
+                              // --- Penting: AKTIFKAN kembali deteksi goyangan saat kembali ---
+                              _setShakeDetectionEnabled(true);
+                              _filterItems(); // Perbarui item jika ada perubahan di checkout
+                              widget.onCartViewed?.call(); // Perbarui badge di Home
                             });
                           },
                           style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            textStyle: const TextStyle(fontSize: 18),
+                            backgroundColor:
+                                const Color(0xFF8A2BE2),
+                            foregroundColor: Color.fromARGB(255, 255, 255, 255),
+                            minimumSize: const Size.fromHeight(55),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 5,
                           ),
                           child: const Text("Checkout"),
                         ),
@@ -424,7 +461,7 @@ class _CartPageState extends State<CartPage>
                   itemBuilder: (context, index) {
                     final item = _userWishlistItems[index];
                     return Card(
-                      color: Colors.pink[50],
+                      color: const Color.fromARGB(255, 255, 255, 255),
                       margin: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       child: Padding(
@@ -464,7 +501,8 @@ class _CartPageState extends State<CartPage>
                                             _addToCartFromWishlist(item),
                                         icon: const Icon(
                                             Icons.add_shopping_cart,
-                                            color: Colors.blue),
+                                            color: Color.fromARGB(
+                                                255, 54, 54, 54)),
                                         tooltip: 'Tambah ke Keranjang',
                                       ),
                                       IconButton(

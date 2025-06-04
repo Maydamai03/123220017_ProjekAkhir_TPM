@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // Untuk format tanggal dan waktu
+import 'dart:async'; // Untuk Timer
 
 class FeedbackPage extends StatefulWidget {
   const FeedbackPage({super.key});
@@ -10,20 +11,45 @@ class FeedbackPage extends StatefulWidget {
 
 class _FeedbackPageState extends State<FeedbackPage> {
   String _selectedTimezone = 'WITA'; // Default zona waktu konversi
+  Timer? _timer; // Timer untuk memperbarui waktu secara real-time
 
   // Waktu operasional toko di WIB (UTC+7)
   final TimeOfDay _openingTimeWIB = TimeOfDay(hour: 9, minute: 0); // 09:00 WIB
-  final TimeOfDay _closingTimeWIB =
-      TimeOfDay(hour: 20, minute: 0); // 20:00 WIB (Sesuai permintaan)
+  final TimeOfDay _closingTimeWIB = TimeOfDay(hour: 20, minute: 0); // 20:00 WIB
 
   // Offset zona waktu terhadap WIB (UTC+7)
   // Ini adalah perhitungan sederhana yang TIDAK mempertimbangkan Daylight Saving Time (DST)
   final Map<String, Duration> _timezoneOffsetsFromWIB = {
     'WIB': const Duration(hours: 0),
-    'WITA': const Duration(hours: 1), // WIB + 1 jam
-    'WIT': const Duration(hours: 2), // WIB + 2 jam
-    'London': const Duration(hours: -7), // London (GMT) adalah WIB - 7 jam
+    'WITA': const Duration(hours: 1), // WIB + 1 jam (UTC+8)
+    'WIT': const Duration(hours: 2), // WIB + 2 jam (UTC+9)
+    'London':
+        const Duration(hours: -7), // London (GMT) adalah WIB - 7 jam (UTC+0)
+    'Kuala Lumpur':
+        const Duration(hours: 1), // Kuala Lumpur adalah WIB + 1 jam (UTC+8)
+    'Manila': const Duration(hours: 1), // Manila adalah WIB + 1 jam (UTC+8)
+    'Singapura':
+        const Duration(hours: 1), // Singapura adalah WIB + 1 jam (UTC+8)
   };
+
+  @override
+  void initState() {
+    super.initState();
+    // Inisialisasi timer untuk memperbarui waktu setiap detik
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          // Waktu akan diperbarui saat setState dipanggil
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel(); // Pastikan timer dibatalkan saat widget dihapus
+    super.dispose();
+  }
 
   // Fungsi untuk mendapatkan jam operasional terkonversi
   String _getOperatingHours(String timezoneName) {
@@ -43,9 +69,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
     String formattedClose = formatter.format(closingTimeConverted);
 
     // Cek apakah toko sedang buka atau tutup di zona waktu ini
-    final DateTime currentTimeInTargetZone =
-        now.add(offset); // Waktu sekarang di zona target
-    // Perbandingan harus dilakukan dengan memastikan hari yang sama jika melewati tengah malam
+    final DateTime currentTimeInTargetZone = now.add(offset);
     final TimeOfDay currentTimeOfDay =
         TimeOfDay.fromDateTime(currentTimeInTargetZone);
     final TimeOfDay openingTimeOfDayConverted =
@@ -54,29 +78,20 @@ class _FeedbackPageState extends State<FeedbackPage> {
         TimeOfDay.fromDateTime(closingTimeConverted);
 
     bool isOpen = false;
-    if (openingTimeOfDayConverted.hour < closingTimeOfDayConverted.hour ||
-        (openingTimeOfDayConverted.hour == closingTimeOfDayConverted.hour &&
-            openingTimeOfDayConverted.minute <=
-                closingTimeOfDayConverted.minute)) {
-      // Kasus normal: buka dan tutup di hari yang sama
-      isOpen = currentTimeOfDay.hour > openingTimeOfDayConverted.hour ||
-          (currentTimeOfDay.hour == openingTimeOfDayConverted.hour &&
-              currentTimeOfDay.minute >= openingTimeOfDayConverted.minute);
-      isOpen = isOpen &&
-          (currentTimeOfDay.hour < closingTimeOfDayConverted.hour ||
-              (currentTimeOfDay.hour == closingTimeOfDayConverted.hour &&
-                  currentTimeOfDay.minute < closingTimeOfDayConverted.minute));
+    // Handle cases where closing time might be on the next day (e.g., 22:00 - 06:00)
+    if (openingTimeConverted.isBefore(closingTimeConverted)) {
+      // Normal operating hours within the same day
+      isOpen = (currentTimeInTargetZone.isAfter(openingTimeConverted) ||
+              currentTimeInTargetZone.isAtSameMomentAs(openingTimeConverted)) &&
+          currentTimeInTargetZone.isBefore(closingTimeConverted);
     } else {
-      // Kasus melewati tengah malam (misal buka jam 22:00, tutup jam 06:00)
-      isOpen = currentTimeOfDay.hour > openingTimeOfDayConverted.hour ||
-          (currentTimeOfDay.hour == openingTimeOfDayConverted.hour &&
-              currentTimeOfDay.minute >= openingTimeOfDayConverted.minute) ||
-          currentTimeOfDay.hour < closingTimeOfDayConverted.hour ||
-          (currentTimeOfDay.hour == closingTimeOfDayConverted.hour &&
-              currentTimeOfDay.minute < closingTimeOfDayConverted.minute);
+      // Operating hours span across midnight (e.g., 20:00 - 09:00 next day)
+      isOpen = (currentTimeInTargetZone.isAfter(openingTimeConverted) ||
+              currentTimeInTargetZone.isAtSameMomentAs(openingTimeConverted)) ||
+          currentTimeInTargetZone.isBefore(closingTimeConverted);
     }
 
-    return '$formattedOpen - $formattedClose ${isOpen ? "(Buka Sekarang)" : "(Tutup)"}';
+    return '$formattedOpen - $formattedClose ${isOpen ? "(Open Now)" : "(Closed)"}';
   }
 
   // Fungsi untuk mendapatkan waktu saat ini di zona waktu tertentu
@@ -84,94 +99,125 @@ class _FeedbackPageState extends State<FeedbackPage> {
     final Duration offset = _timezoneOffsetsFromWIB[timezoneName]!;
     final DateTime now = DateTime.now();
     final DateTime currentTimeConverted = now.add(offset);
-    return DateFormat('dd MMM, HH:mm').format(currentTimeConverted);
+    return DateFormat('HH:mm:ss, dd MMM').format(currentTimeConverted);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Saran & Kesan")),
+      backgroundColor: Colors.grey[100], // Light grey background
+      appBar: AppBar(
+        title: const Text(
+          "Informasi & Saran Kesan",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.grey[900], // Dark grey app bar
+        iconTheme: const IconThemeData(color: Colors.white), // White back icon
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Bagian Info Jam Operasional
+            // --- Bagian Info Jam Operasional ---
             Card(
-              margin: const EdgeInsets.only(bottom: 20),
-              elevation: 4,
+              margin: const EdgeInsets.only(bottom: 25),
+              elevation: 6,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
+              color: Colors.white,
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Jam Operasional Toko",
+                      "Jam Operasi Toko",
                       style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue),
+                          color: Colors.black87),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Toko kita beroperasi dari pukul ${_openingTimeWIB.format(context)} sampai ${_closingTimeWIB.format(context)} WIB.",
+                      style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      "Konversi ke Zona Lain",
+                      style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black54),
                     ),
                     const SizedBox(height: 10),
-                    Text(
-                      "Toko kami beroperasi dari pukul ${_openingTimeWIB.format(context)} hingga ${_closingTimeWIB.format(context)} WIB.",
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 15),
-                    const Text(
-                      "Waktu Operasional Terkonversi:",
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
                     _buildTimezoneInfoRow('WIB'),
                     _buildTimezoneInfoRow('WITA'),
                     _buildTimezoneInfoRow('WIT'),
                     _buildTimezoneInfoRow('London'),
-                    const SizedBox(height: 8),
-                    const Text(
-                      "*Estimasi tanpa Daylight Saving Time (DST). Waktu diperbarui setiap detik.",
-                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                    _buildTimezoneInfoRow('Kuala Lumpur'),
+                    _buildTimezoneInfoRow('Manila'),
+                    _buildTimezoneInfoRow('Singapura'),
+                    const SizedBox(height: 15),
+                    Text(
+                      "*Waktu diperbarui setiap detik.",
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                     ),
                   ],
                 ),
               ),
             ),
 
-            // Bagian Konversi Waktu Saat Ini
+            // --- Bagian Konversi Waktu Saat Ini ---
             Card(
-              margin: const EdgeInsets.only(bottom: 20),
-              elevation: 4,
+              margin: const EdgeInsets.only(bottom: 25),
+              elevation: 6,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
+              color: Colors.white,
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Waktu Saat Ini (Periksa Zona Waktu Anda):",
+                      "Waktu Sekarang (Cek Zona Waktu Anda):",
                       style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue),
+                          color: Colors.black87),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Text(
-                      "WIB: ${DateFormat('dd MMM, HH:mm').format(DateTime.now())}",
-                      style: const TextStyle(fontSize: 16),
+                      "WIB: ${DateFormat('HH:mm:ss, dd MMM').format(DateTime.now())}",
+                      style: TextStyle(fontSize: 16, color: Colors.grey[700]),
                     ),
-                    const SizedBox(height: 15),
+                    const SizedBox(height: 20),
                     DropdownButtonFormField<String>(
                       value: _selectedTimezone,
-                      decoration: const InputDecoration(
-                        labelText: "Konversi Waktu ke",
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: "Konversi Waktu ke ",
+                        labelStyle: TextStyle(color: Colors.grey[700]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey[400]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: Colors.black54, width: 2),
+                        ),
                       ),
+                      dropdownColor: Colors.white,
                       items: _timezoneOffsetsFromWIB.keys
-                          .where((key) => key != 'WIB')
+                          .where((key) =>
+                              key != 'WIB') // Exclude WIB from dropdown
                           .map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
-                          child: Text(value),
+                          child: Text(value,
+                              style: const TextStyle(color: Colors.black87)),
                         );
                       }).toList(),
                       onChanged: (String? newValue) {
@@ -182,58 +228,57 @@ class _FeedbackPageState extends State<FeedbackPage> {
                         }
                       },
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 15),
                     Text(
                       "Waktu di $_selectedTimezone: ${_getCurrentTimeInTimezone(_selectedTimezone)}",
                       style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.deepOrange),
+                          color:
+                              Colors.black), // Strong black for converted time
                     ),
                   ],
                 ),
               ),
             ),
 
-            // Bagian Kesan dan Pesan Statis
+            // --- Bagian Kesan dan Pesan Statis ---
             Card(
-              elevation: 4,
+              elevation: 6,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
+              color: Colors.white,
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Kesan dan Pesan",
+                      "Kesan & Pesan",
                       style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue),
+                          color: Colors.black87),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Kesan saya terhadap mata kuliah ini, di bawah arahan Bapak Bagus Muhammad Akbar, S.ST., M.Kom., adalah sebuah petualangan yang mengasyikkan sekaligus mengasah kemampuan. Setiap 'pusing tujuh keliling' yang kami alami dalam eksplorasi mobile justru menjadi penempa, membentuk kami dengan pengalaman yang tak ternilai harganya. Ini adalah jejak digital yang tak akan mudah terhapus dari memori. Semoga jejak inovasi ini senantiasa menginspirasi angkatan-angkatan selanjutnya ya Pak!",
+                      style: TextStyle(fontSize: 16, color: Colors.grey[700]),
                     ),
                     const SizedBox(height: 10),
-                    const Text(
-                      "Halo pelanggan setia! Kami sangat senang Anda telah meluangkan waktu untuk mengunjungi toko aksesoris kami. Kami berkomitmen untuk menyediakan produk-produk berkualitas tinggi dan pengalaman berbelanja yang tak terlupakan.",
-                      style: TextStyle(fontSize: 16),
+                    Text(
+                      "Harapan terbesar kami adalah agar segala tetes keringat dan dedikasi yang telah kami curahkan , terbalaskan pada nilai ya pak hehe dan tentunya perjalanan karier di masa depan juga, dapat berbalas manis dan menjadi pijakan menuju kesuksesan.",
+                      style: TextStyle(fontSize: 16, color: Colors.grey[700]),
                     ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      "Setiap aksesoris di toko kami dipilih dengan cermat untuk memastikan Anda mendapatkan yang terbaik, baik dari segi gaya maupun kualitas. Kami percaya bahwa setiap detail kecil dapat membuat perbedaan besar.",
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      "Kami selalu berupaya meningkatkan layanan kami. Jika Anda memiliki saran atau kesan, jangan ragu untuk menyampaikannya. Kepuasan Anda adalah prioritas utama kami!",
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 15),
                     Align(
                       alignment: Alignment.bottomRight,
                       child: Text(
-                        "- Tim Toko Aksesoris",
+                        "- Owner Accessories Store, Jagad Damai",
                         style: TextStyle(
                             fontSize: 14,
                             fontStyle: FontStyle.italic,
-                            color: Colors.grey[700]),
+                            color: Colors.grey[600]),
                       ),
                     ),
                   ],
@@ -255,11 +300,17 @@ class _FeedbackPageState extends State<FeedbackPage> {
         children: [
           Text(
             "$timezoneName:",
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87),
           ),
           Text(
             _getOperatingHours(timezoneName),
-            style: const TextStyle(fontSize: 16, color: Colors.teal),
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black), // Changed to black for monochromatic
           ),
         ],
       ),

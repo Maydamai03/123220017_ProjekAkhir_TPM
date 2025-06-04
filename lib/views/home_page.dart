@@ -11,7 +11,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:projek_akhir_tpm/models/cart_item_model.dart';
 import 'package:projek_akhir_tpm/models/wishlist_item_model.dart';
 import 'package:projek_akhir_tpm/utils/session_manager.dart';
-import 'package:intl/intl.dart'; // <<< Import ini
+import 'package:intl/intl.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -33,7 +33,6 @@ class _HomePageState extends State<HomePage> {
   late Box<WishlistItem> _wishlistBox;
   int? _currentUserId;
 
-  // Deklarasikan formatter di sini sebagai final
   final NumberFormat _currencyFormatter =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -70,9 +69,12 @@ class _HomePageState extends State<HomePage> {
       });
     } catch (e) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Gagal memuat produk: $e")),
-      );
+      if (mounted) {
+        // Check if widget is still mounted before showing SnackBar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gagal memuat produk: $e")),
+        );
+      }
     }
   }
 
@@ -98,17 +100,21 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  String _shortenName(String name, [int maxLength = 20]) {
+  String _shortenName(String name, [int maxLength = 25]) {
+    // Increased max length slightly
     if (name.length <= maxLength) return name;
     return '${name.substring(0, maxLength)}...';
   }
 
   Future<void> _addToCartFromHome(ProductModel product) async {
     if (_currentUserId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Anda harus login untuk menambahkan ke keranjang!")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content:
+                  Text("Anda harus login untuk menambahkan ke keranjang!")),
+        );
+      }
       return;
     }
 
@@ -130,17 +136,21 @@ class _HomePageState extends State<HomePage> {
       await _cartBox.add(newCartItem);
     }
     addNewCartItem();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("${product.name} ditambahkan ke keranjang")),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${product.name} ditambahkan ke keranjang")),
+      );
+    }
   }
 
   Future<void> _toggleWishlistFromHome(ProductModel product) async {
     if (_currentUserId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Anda harus login untuk menambahkan ke wishlist!")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Anda harus login untuk menambahkan ke wishlist!")),
+        );
+      }
       return;
     }
 
@@ -151,20 +161,24 @@ class _HomePageState extends State<HomePage> {
 
     if (existingWishlistItemIndex != -1) {
       await _wishlistBox.values.toList()[existingWishlistItemIndex].delete();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("${product.name} dihapus dari wishlist")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${product.name} dihapus dari wishlist")),
+        );
+      }
     } else {
       final newWishlistItem = WishlistItem(
         userId: _currentUserId!,
         product: product,
       );
       await _wishlistBox.add(newWishlistItem);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("${product.name} ditambahkan ke wishlist")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${product.name} ditambahkan ke wishlist")),
+        );
+      }
     }
-    setState(() {});
+    setState(() {}); // Trigger rebuild to update wishlist icon
   }
 
   Widget _buildProductCard(ProductModel product) {
@@ -185,17 +199,17 @@ class _HomePageState extends State<HomePage> {
         );
       },
       child: Card(
-        color: const Color.fromARGB(255, 245, 245, 245),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 3,
-        margin: const EdgeInsets.all(4),
+        color: Colors.white, // Warna putih untuk kartu produk
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(0)), // Sudut membulat
+        elevation: 0, // Sedikit bayangan
+        margin: const EdgeInsets.all(0.4), // Jarak antar kartu
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Gambar produk (tanpa tombol di atasnya)
             ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(0)), // Bulatkan sudut atas
               child: AspectRatio(
                 aspectRatio: 1,
                 child: Image.network(
@@ -203,72 +217,79 @@ class _HomePageState extends State<HomePage> {
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.broken_image, size: 40, color: Colors.grey),
-                      SizedBox(height: 8),
-                      Text("Gagal memuat gambar",
-                          style: TextStyle(fontSize: 12)),
+                    children: [
+                      Icon(Icons.broken_image,
+                          size: 40,
+                          color: Colors.grey[400]), // Ikon lebih terang
+                      const SizedBox(height: 8),
+                      Text(
+                        "Image failed to load", // Pesan error bahasa inggris
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 2), // Padding lebih proporsional
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment
-                        .spaceBetween, // Untuk menempatkan tombol di kanan
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                        // Agar nama produk tidak overflow
                         child: Text(
                           _shortenName(product.name),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700, // Lebih tebal
+                            fontSize: 14, // Sedikit lebih besar
+                            color: Colors.grey[800], // Warna teks produk
                           ),
-                          overflow: TextOverflow
-                              .ellipsis, // Jika nama terlalu panjang
+                          overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
                       ),
-                      // Tombol Wishlist di samping nama produk
                       IconButton(
                         icon: Icon(
                           isInWishlist ? Icons.favorite : Icons.favorite_border,
-                          color: isInWishlist ? Colors.red : Colors.grey,
+                          color: isInWishlist
+                              ? Colors.red
+                              : Colors.grey[
+                                  400], // Warna merah jika di wishlist, abu-abu jika tidak
+                          size: 20,
                         ),
                         onPressed: () => _toggleWishlistFromHome(product),
                         padding: EdgeInsets.zero,
-                        constraints: BoxConstraints(),
-                        tooltip: 'Tambah ke Wishlist',
+                        constraints: const BoxConstraints(),
+                        tooltip: isInWishlist
+                            ? 'Remove from Wishlist'
+                            : 'Add to Wishlist',
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 1), // Jarak lebih
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _currencyFormatter
-                            .format(product.price), // Format harga di sini
-                        style: const TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 12,
+                        _currencyFormatter.format(product.price),
+                        style: TextStyle(
+                          color: Colors.grey[900], // Warna harga lebih gelap
+                          fontWeight: FontWeight.w600, // Lebih tebal
+                          fontSize: 14, // Sedikit lebih besar
                         ),
                       ),
-                      // Tombol Add Keranjang di samping harga
                       IconButton(
-                        icon: const Icon(Icons.add_shopping_cart,
-                            color: Color.fromARGB(255, 49, 49, 49), size: 20),
+                        icon: Icon(Icons.add_shopping_cart,
+                            color: Colors.grey[700], // Warna ikon keranjang
+                            size: 20),
                         onPressed: () => _addToCartFromHome(product),
                         padding: EdgeInsets.zero,
-                        constraints: BoxConstraints(),
-                        tooltip: 'Tambah ke Keranjang',
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Add to Cart',
                       ),
                     ],
                   ),
@@ -282,43 +303,90 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHomeContent() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_filteredProducts.isEmpty)
-      return const Center(child: Text("Produk tidak ditemukan"));
-
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: TextField(
-            controller: _searchCtrl,
-            decoration: const InputDecoration(
-              labelText: "Cari produk",
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
-            ),
+        // Custom AppBar
+        Container(
+          padding: const EdgeInsets.fromLTRB(
+              16.0, 40.0, 16.0, 16.0), // Padding disesuaikan untuk status bar
+          color: const Color.fromARGB(255, 255, 255, 255), // Warna AppBar
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // const Text(
+              //   "Our Products",
+              //   style: TextStyle(
+              //     color: Colors.white,
+              //     fontSize: 28,
+              //     fontWeight: FontWeight.bold,
+              //   ),
+              // ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: _searchCtrl,
+                style: const TextStyle(
+                    color: Color.fromARGB(255, 0, 0, 0)), // Warna teks input putih
+                decoration: InputDecoration(
+                  hintText: "Search for products...",
+                  hintStyle: TextStyle(color: const Color.fromARGB(255, 0, 0, 0)),
+                  prefixIcon: const Icon(Icons.search, color: Color.fromARGB(179, 0, 0, 0)),
+                  filled: true,
+                  fillColor: const Color.fromARGB(255, 234, 234, 234), // Background search bar yang lebih gelap
+                  border: OutlineInputBorder(
+                    borderRadius:
+                        BorderRadius.circular(12.0), // Sudut lebih membulat
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12.0),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12.0),
+                    borderSide: const BorderSide(
+                        color: Colors.grey, width: 2.0), // Border saat fokus
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      vertical: 14.0, horizontal: 16.0),
+                ),
+              ),
+            ],
           ),
         ),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.all(8),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 0.75,
-            ),
-            itemCount: _filteredProducts.length,
-            itemBuilder: (context, index) =>
-                _buildProductCard(_filteredProducts[index]),
-          ),
-        )
+
+        _loading
+            ? const Expanded(
+                child: Center(
+                    child: CircularProgressIndicator(
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Colors.grey))))
+            : _filteredProducts.isEmpty
+                ? const Expanded(
+                    child: Center(
+                        child: Text("No products found",
+                            style: TextStyle(color: Colors.grey))))
+                : Expanded(
+                    child: GridView.builder(
+                      padding:
+                          const EdgeInsets.all(3), // Padding keseluruhan grid
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 0, // Jarak horizontal
+                        mainAxisSpacing: 0, // Jarak vertikal
+                        childAspectRatio: 0.6, // Sesuaikan rasio ini jika perlu agar konten tidak terpotong
+                      ),
+                      itemCount: _filteredProducts.length,
+                      itemBuilder: (context, index) =>
+                          _buildProductCard(_filteredProducts[index]),
+                    ),
+                  )
       ],
     );
   }
 
   List<Widget> _pages() => [
-        _buildHomeContent(),
+        _buildHomeContent(), // Home page dengan search bar dan grid produk
         CartPage(onCartViewed: _resetCartNotification),
         const HistoryPembayaranPage(),
         const ProfilePage(),
@@ -328,12 +396,15 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100], // Background keseluruhan Scaffold
       body: _pages()[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         selectedItemColor: Colors.black,
-        unselectedItemColor: Colors.black54,
+        unselectedItemColor:
+            Colors.grey[600], // Warna ikon tidak terpilih lebih ke abu-abu
+        backgroundColor: Colors.white, // Background bottom nav bar putih
         type: BottomNavigationBarType.fixed,
         items: [
           const BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
@@ -362,14 +433,14 @@ class _HomePageState extends State<HomePage> {
                   ),
               ],
             ),
-            label: "Keranjang",
+            label: "Cart", // Ubah ke English
           ),
           const BottomNavigationBarItem(
-              icon: Icon(Icons.history), label: "Riwayat"),
+              icon: Icon(Icons.history), label: "History"), // Ubah ke English
           const BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: "Profil"),
+              icon: Icon(Icons.person), label: "Profile"), // Ubah ke English
           const BottomNavigationBarItem(
-              icon: Icon(Icons.feedback), label: "Saran & Kesan"),
+              icon: Icon(Icons.feedback), label: "Feedback"), // Ubah ke English
         ],
       ),
     );
